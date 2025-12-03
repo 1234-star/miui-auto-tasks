@@ -5,24 +5,39 @@ echo "在本任务运行完后请不要忘记禁用该任务！"
 echo "在本任务运行完后请不要忘记禁用该任务！"
 echo "————————————"
 SCRIPT_PATH="$(readlink -f "$0")"
-ROOT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" || exit 1; pwd)"
 QL_BASE="${QL_DIR:-/ql/data}"
+ROOT_DIR=""
 
-# 尝试定位仓库根目录，优先当前脚本所在目录，其次青龙默认 repo 目录
-for CANDIDATE in \
-    "$ROOT_DIR" \
-    "$QL_BASE/repo/1234-star_miui-auto-tasks_master" \
-    "$QL_BASE/repo/miui-auto-tasks" \
-    "$QL_BASE/repo/$(basename "$ROOT_DIR")" \
-    "$QL_BASE/repo"/*miui-auto-tasks*; do
-    if [ -f "$CANDIDATE/requirements.txt" ] && [ -f "$CANDIDATE/miuitask.py" ]; then
-        ROOT_DIR="$(cd "$CANDIDATE" || exit 1; pwd)"
-        break
-    fi
+# 尝试定位仓库根目录，兼容 repo/scripts 以及不同仓库名
+CANDIDATES=(
+  "$(dirname "$SCRIPT_PATH")"
+  "$QL_BASE/repo/1234-star_miui-auto-tasks_master"
+  "$QL_BASE/repo/1234-star_miui-auto-tasks"
+  "$QL_BASE/repo/0-8-4_miui-auto-tasks_master"
+  "$QL_BASE/scripts/1234-star_miui-auto-tasks_master"
+  "$QL_BASE/scripts/1234-star_miui-auto-tasks"
+  "$QL_BASE/scripts/0-8-4_miui-auto-tasks_master"
+  "$QL_BASE/repo"/*miui-auto-tasks*
+  "$QL_BASE/scripts"/*miui-auto-tasks*
+)
+
+for CANDIDATE in "${CANDIDATES[@]}"; do
+  [ -d "$CANDIDATE" ] || continue
+  if [ -f "$CANDIDATE/requirements.txt" ] && [ -f "$CANDIDATE/miuitask.py" ]; then
+    ROOT_DIR="$(cd "$CANDIDATE" || exit 1; pwd)"
+    break
+  fi
 done
+
+if [ -z "$ROOT_DIR" ]; then
+  echo "未找到仓库目录，请确认已拉取 1234-star/miui-auto-tasks 到 /ql/data/repo 下"
+  exit 1
+fi
 
 CONFIG_DIR="$ROOT_DIR/data"
 REQ_FILE="$ROOT_DIR/requirements.txt"
+echo "仓库目录: $ROOT_DIR"
+mkdir -p "$CONFIG_DIR"
 echo "开始安装依赖"
 if [ ! -f "$REQ_FILE" ]; then
   echo "未找到 requirements.txt，当前目录: $ROOT_DIR"
