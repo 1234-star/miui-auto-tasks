@@ -30,7 +30,18 @@ for CANDIDATE in "${CANDIDATES[@]}"; do
 done
 
 if [ -z "$ROOT_DIR" ]; then
-  echo "未找到仓库目录，请确认已拉取 1234-star/miui-auto-tasks 到 /ql/data/repo 下"
+  # 尝试全局搜索
+  for FOUND in $(find "$QL_BASE" /ql/data/scripts /ql/data/repo 2>/dev/null -maxdepth 5 -type f -name "miuitask.py" | head -n 5); do
+    BASE_DIR="$(dirname "$FOUND")"
+    if [ -f "$BASE_DIR/requirements.txt" ]; then
+      ROOT_DIR="$BASE_DIR"
+      break
+    fi
+  done
+fi
+
+if [ -z "$ROOT_DIR" ]; then
+  echo "未找到仓库目录，请确认已拉取 1234-star/miui-auto-tasks 到 /ql/data/repo 或 /ql/data/scripts 下"
   exit 1
 fi
 
