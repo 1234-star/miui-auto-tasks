@@ -157,6 +157,8 @@ class Preference:
         get_geetest_validate_path="$",
         get_geetest_challenge_path="$",
         get_geetest_try_count=20,
+        two_captcha_api_key="",
+        two_captcha_pageurl="https://account.xiaomi.com",
     ):
         self.geetest_url = geetest_url
         """极验验证URL"""
@@ -186,6 +188,10 @@ class Preference:
         """获取极验验证challenge的路径"""
         self.get_geetest_try_count = get_geetest_try_count
         """获取极验验证结果尝试次数"""
+        self.two_captcha_api_key = two_captcha_api_key
+        """2captcha API key"""
+        self.two_captcha_pageurl = two_captcha_pageurl
+        """2captcha 所需的目标页面 URL"""
 
 class Config:
     """插件数据"""

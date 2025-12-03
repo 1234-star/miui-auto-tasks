@@ -57,6 +57,7 @@ class LoginResultHandler(ApiResultHandler):
         self.location = self.content.get("location")
         self.pass_token = self.content.get("passToken")
         self.user_id = str(self.content.get("userId"))
+        self.notification_url = self.content.get("notificationUrl")
 
     @property
     def need_captcha(self):

@@ -9,11 +9,14 @@ import time
 from os import getenv
 from typing import Dict, Optional, Tuple, Union
 
+from urllib.parse import parse_qsl, urlparse
+
 from ..config import Account, ConfigManager
 from ..data_model import LoginResultHandler
 from ..logger import log
 from ..request import get, post
 from ..utils import generate_qrcode
+from ..captcha import get_validate
 from .sign import BaseSign
 
 
@@ -103,13 +106,60 @@ class Login:
                 ConfigManager.write_plugin_data()
                 return cookies
             elif api_data.need_captcha:
-                log.error("当前账号需要短信验证码, 请尝试修改UA或设备ID")
+                log.error("当前账号需要验证码, 尝试自动处理")
+                if solved := self._solve_login_captcha(api_data, headers, data):
+                    return solved
             else:
                 log.error(f"小米账号登录失败：{api_data.message}")
             return False
         except Exception:  # pylint: disable=broad-exception-caught
             log.exception("登录小米账号出错")
             return False
+
+    def _solve_login_captcha(self, api_data: LoginResultHandler, headers: dict, data: dict):
+        """使用 2captcha 自动通过登录验证码"""
+        captcha_url = api_data.notification_url or ""
+        parsed = urlparse(captcha_url)
+        query_params = dict(parse_qsl(parsed.query))
+        gt = query_params.get("gt") or query_params.get("c") or ""
+        challenge = query_params.get("challenge") or query_params.get("l") or ""
+        if not gt or not challenge:
+            log.error("未找到验证码参数，无法自动处理")
+            return
+        solved = get_validate(gt, challenge, page_url=captcha_url)
+        if not (solved.validate and solved.challenge):
+            log.error("验证码自动处理失败")
+            return
+        log.info("验证码处理成功，尝试重新登录")
+        payload = data.copy()
+        payload.update(
+            {
+                "geetest_challenge": solved.challenge,
+                "geetest_validate": solved.validate,
+                "geetest_seccode": f"{solved.validate}|jordan",
+            }
+        )
+        response = post(
+            "https://account.xiaomi.com/pass/serviceLoginAuth2",
+            headers=headers,
+            data=payload,
+            cookies={"deviceId": "S13aukyf5y2jecCG"},
+        )
+        log.debug(response.text)
+        result = response.text.lstrip("&").lstrip("START").lstrip("&")
+        data = json.loads(result)  # pylint: disable=no-member
+        retry_data = LoginResultHandler(data)
+        if retry_data.success:
+            log.success("验证码通过后登录成功")
+            self.account.cookies["passToken"] = retry_data.pass_token
+            self.account.uid = retry_data.user_id
+            if cookies := self.get_cookies_by_passtk(
+                retry_data.user_id, retry_data.pass_token
+            ):
+                self.account.cookies.update(cookies)
+                ConfigManager.write_plugin_data()
+                return cookies
+        log.error(f"验证码处理后登录失败：{retry_data.message}")
 
     def get_cookies(self, url: str) -> Union[Dict[str, str], bool]:
         """获取社区 Cookie"""

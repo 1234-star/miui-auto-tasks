@@ -83,13 +83,81 @@ def get_validate_other(
         return GeetestResult(challenge="", validate="")
 
 
+def _solve_geetest_by_2captcha(
+    gt: str, challenge: str, page_url: str
+) -> GeetestResult:
+    """使用 2captcha 解决极验验证"""
+    api_key = _conf.preference.two_captcha_api_key
+    if not api_key:
+        return GeetestResult(challenge="", validate="")
+    try:
+        payload = {
+            "key": api_key,
+            "method": "geetest",
+            "gt": gt,
+            "challenge": challenge,
+            "pageurl": page_url,
+            "json": 1,
+        }
+        response = request(
+            "post",
+            "https://2captcha.com/in.php",
+            data=payload,
+        )
+        log.debug(response.text)
+        submit_result = response.json()
+        if submit_result.get("status") != 1:
+            log.error(f"2captcha提交失败: {submit_result.get('request')}")
+            return GeetestResult(challenge="", validate="")
+        captcha_id = str(submit_result.get("request"))
+        for _ in range(_conf.preference.get_geetest_try_count):
+            time.sleep(5)
+            result_resp = request(
+                "get",
+                "https://2captcha.com/res.php",
+                params={"key": api_key, "action": "get", "id": captcha_id, "json": 1},
+            )
+            log.debug(result_resp.text)
+            result_data = result_resp.json()
+            if result_data.get("status") == 1:
+                req = result_data.get("request")
+                if isinstance(req, str):
+                    try:
+                        req = json.loads(req)
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        pass
+                if isinstance(req, dict):
+                    validate = req.get("validate", "")
+                    solved_challenge = req.get("challenge", challenge)
+                    if validate:
+                        return GeetestResult(
+                            challenge=solved_challenge, validate=validate
+                        )
+            elif result_data.get("request") != "CAPCHA_NOT_READY":
+                log.error(f"2captcha返回错误: {result_data.get('request')}")
+                break
+        return GeetestResult(challenge="", validate="")
+    except Exception:  # pylint: disable=broad-exception-caught
+        log.exception("调用2captcha解决极验失败")
+        return GeetestResult(challenge="", validate="")
+
+
 def get_validate(
-    gt: str, challenge: str
+    gt: str, challenge: str, page_url: str | None = None
 ) -> GeetestResult:  # pylint: disable=invalid-name
     """创建人机验证并结果"""
     try:
         validate = ""
         result = ""
+        page_url = (
+            page_url
+            or _conf.preference.two_captcha_pageurl
+            or "https://account.xiaomi.com"
+        )
+        if _conf.preference.two_captcha_api_key:
+            solved = _solve_geetest_by_2captcha(gt, challenge, page_url)
+            if solved.validate and solved.challenge:
+                return solved
         if _conf.preference.geetest_url:
             params = _conf.preference.geetest_params.copy()
             params = json.loads(
