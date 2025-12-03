@@ -16,15 +16,23 @@ ROOT_PATH = Path(__file__).parent.parent.absolute()
 DATA_PATH = ROOT_PATH / "data"
 """数据保存目录"""
 
-CONFIG_TYPE = "json" if os.path.isfile(DATA_PATH / "config.json") else "yaml"
-"""数据文件类型"""
-
-CONFIG_PATH = (
-    DATA_PATH / f"config.{CONFIG_TYPE}"
-    if os.getenv("MIUITASK_CONFIG_PATH") is None
-    else Path(str(os.getenv("MIUITASK_CONFIG_PATH")))
-)
-"""数据文件默认路径"""
+# 配置文件默认路径与类型（支持 json / yaml / yml，亦可通过环境变量自定义路径）
+ENV_CONFIG_PATH = os.getenv("MIUITASK_CONFIG_PATH")
+if ENV_CONFIG_PATH:
+    CONFIG_PATH = Path(str(ENV_CONFIG_PATH))
+    CONFIG_TYPE = CONFIG_PATH.suffix.lstrip(".").lower() or "yaml"
+else:
+    _candidate_types = ("json", "yaml", "yml")
+    CONFIG_PATH = None
+    CONFIG_TYPE = "yaml"
+    for ext in _candidate_types:
+        candidate = DATA_PATH / f"config.{ext}"
+        if candidate.is_file():
+            CONFIG_PATH = candidate
+            CONFIG_TYPE = ext
+            break
+    if CONFIG_PATH is None:
+        CONFIG_PATH = DATA_PATH / f"config.{CONFIG_TYPE}"
 
 os.makedirs(DATA_PATH, exist_ok=True)
 
@@ -264,7 +272,7 @@ class ConfigManager:
             if CONFIG_TYPE == "json":
                 with open(CONFIG_PATH, "w", encoding="utf-8") as file:
                     json.dump(data.to_dict(), file, indent=4, ensure_ascii=False)
-            else:
+            else:  # yaml 或 yml
                 with open(CONFIG_PATH, "w", encoding="utf-8") as file:
                     yaml.dump(
                         data.to_dict(),

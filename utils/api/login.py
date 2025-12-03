@@ -164,7 +164,7 @@ class Login:
     def get_cookies(self, url: str) -> Union[Dict[str, str], bool]:
         """获取社区 Cookie"""
         try:
-            response = get(url, follow_redirects=False)
+            response = get(url, allow_redirects=False)
             log.debug(response.text)
             return dict(response.cookies)
         except Exception:  # pylint: disable=broad-exception-caught
